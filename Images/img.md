@@ -1,1 +1,1 @@
-### This structure contains screenshots of similar applications.
+## This structure contains screenshots of similar applications.
