@@ -78,8 +78,9 @@
 
 ### 4. Аналоги<a name="4"></a> 
 
-#### Бот от медиа-компании CNN 
- ![alt text](https://github.com/alkaptur19/3TPO_project/blob/master/Images/2017-03-06-texterra-13.jpg)  
+#### Бот от медиа-компании CNN
+
+![alt text](https://github.com/alkaptur19/3TPO_project/blob/master/Images/2017-03-06-texterra-13.jpg)  
 Бот, показывающий статьи по выбранной пользователем теме, а при подписке ежедневно радует читателя новостями и свежайшими публикациями.
 
 #### Девушка-бот от Microsoft под именем Xiaoice
