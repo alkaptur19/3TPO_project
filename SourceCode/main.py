@@ -1,79 +1,119 @@
 import nltk
-import numpy as np
 import random
 import string
+import re, string, unicodedata
+from nltk.corpus import wordnet as wn
+from nltk.stem.wordnet import WordNetLemmatizer
+from GoogleNews import GoogleNews
+from collections import defaultdict
+import warnings
+warnings.filterwarnings("ignore")
+
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_similarity, linear_kernel
 
-f=open('database.txt','r',errors = 'ignore')
-raw=f.read()
-raw=raw.lower()# converts to lowercase
-nltk.download('punkt') # first-time use only
-nltk.download('wordnet') # first-time use only
-sent_tokens = nltk.sent_tokenize(raw)# converts to list of sentences
-word_tokens = nltk.word_tokenize(raw)# converts to list of words
+welcome_input = ("hello", "hi", "greetings", "sup", "what's up", "hey",)
+welcome_response = ["hi", "hey", "*nods*", "hi there", "hello", "I am glad! You are talking to me"]
+data = open('HR.txt','r',errors = 'ignore')
+raw = data.read()
+raw = raw.lower()
+raw[:1000]
+sent_tokens = nltk.sent_tokenize(raw)
 
-sent_tokens[:2]
-['a chatbot (also known as a talkbot, chatterbot, bot, im bot, interactive agent, or artificial conversational entity) is a computer program or an artificial intelligence which conducts a conversation via auditory or textual methods.',
- 'such programs are often designed to convincingly simulate how a human would behave as a conversational partner, thereby passing the turing test.']
-word_tokens[:2]
-['a', 'chatbot', '(', 'also', 'known']
+'Connect Google News to project'
+googlenews = GoogleNews()
+googlenews = GoogleNews(lang='en')
+googlenews = GoogleNews(period='7d')
+googlenews.set_time_range('10/14/2020','12/14/2020')
+googlenews.set_encode('utf-8')
 
-lemmer = nltk.stem.WordNetLemmatizer()
-#WordNet is a semantically-oriented dictionary of English included in NLTK.
-def LemTokens(tokens):
-    return [lemmer.lemmatize(token) for token in tokens]
-remove_punct_dict = dict((ord(punct), None) for punct in string.punctuation)
-def LemNormalize(text):
-    return LemTokens(nltk.word_tokenize(text.lower().translate(remove_punct_dict)))
+def Normalize(text):
+    remove_punct_dict = dict((ord(punct), None) for punct in string.punctuation)
+    # word tokenization
+    word_token = nltk.word_tokenize(text.lower().translate(remove_punct_dict))
 
-GREETING_INPUTS = ("hello", "hi", "greetings", "sup", "what's up","hey",)
-GREETING_RESPONSES = ["hi", "hey", "*nods*", "hi there", "hello", "I am glad! You are talking to me"]
+    # remove ascii
+    new_words = []
+    for word in word_token:
+        new_word = unicodedata.normalize('NFKD', word).encode('ascii', 'ignore').decode('utf-8', 'ignore')
+        new_words.append(new_word)
 
+    # Remove tags
+    rmv = []
+    for w in new_words:
+        text = re.sub("&lt;/?.*?&gt;", "&lt;&gt;", w)
+        rmv.append(text)
 
-def greeting(sentence):
-    for word in sentence.split():
-        if word.lower() in GREETING_INPUTS:
-            return random.choice(GREETING_RESPONSES)
+    # pos tagging and lemmatization
+    tag_map = defaultdict(lambda: wn.NOUN)
+    tag_map['J'] = wn.ADJ
+    tag_map['V'] = wn.VERB
+    tag_map['R'] = wn.ADV
+    lmtzr = WordNetLemmatizer()
+    lemma_list = []
+    rmv = [i for i in rmv if i]
+    for token, tag in nltk.pos_tag(rmv):
+        lemma = lmtzr.lemmatize(token, tag_map[tag[0]])
+        lemma_list.append(lemma)
+    return lemma_list
 
-def response(user_response):
+def welcome(user_response):
+    for word in user_response.split():
+        if word.lower() in welcome_input:
+            return random.choice(welcome_response)
+
+def generateResponse(user_response):
     robo_response=''
-
-    TfidfVec = TfidfVectorizer(tokenizer=LemNormalize, stop_words='english')
+    sent_tokens.append(user_response)
+    TfidfVec = TfidfVectorizer(tokenizer=Normalize, stop_words='english')
     tfidf = TfidfVec.fit_transform(sent_tokens)
-    vals = cosine_similarity(tfidf[-1], tfidf)
-    idx = vals.argsort()[0][-2]
+    #vals = cosine_similarity(tfidf[-1], tfidf)
+    vals = linear_kernel(tfidf[-1], tfidf)
+    idx=vals.argsort()[0][-2]
     flat = vals.flatten()
     flat.sort()
     req_tfidf = flat[-2]
-
-    if (req_tfidf == 0):
-        robo_response = robo_response + "I am sorry! I don't understand you"
-        return robo_response
+    if "what about" in user_response:
+        print("Checking GoogleNews...")
+        if user_response:
+            robo_response = googlenews_data(user_response)
+            print("Sanny: ", end="")
+            for char in robo_response:
+                print(char + '\n', end="", flush=True)
+            sent_tokens.remove(user_response)
+            googlenews.clear()
     else:
-        robo_response = robo_response + sent_tokens[idx]
-        return robo_response
+        if req_tfidf!=0:
+            robo_response = robo_response+sent_tokens[idx]
+            print("Sanny: ", end="")
+            print(robo_response)
+        else:
+            print("Sanny: Sorry, I cannot process your request yet.", end="")
+
+def googlenews_data(input):
+    reg_ex = re.search('what about (.*)', input)
+    try:
+        if reg_ex:
+            topic = reg_ex.group(1)
+            googlenews.get_news(topic)
+            return googlenews.get_texts()
+    except Exception as e:
+            print("No content has been found")
 
 flag=True
-print("Sanny: My name is Sanny. I will answer your queries about Chatbots. If you want to exit, type Bye!")
-
+print("My name is Sanny and I'm a chatbot. If you want to exit, type Bye!")
 while(flag==True):
     user_response = input()
     user_response=user_response.lower()
-    if(user_response!='bye'):
+    if(user_response not in ['bye','shutdown','exit', 'quit']):
         if(user_response=='thanks' or user_response=='thank you' ):
             flag=False
             print("Sanny: You are welcome..")
         else:
-            if(greeting(user_response)!=None):
-                print("Sanny: "+greeting(user_response))
+            if(welcome(user_response)!=None):
+                print("Sanny: "+welcome(user_response))
             else:
-                sent_tokens.append(user_response)
-                word_tokens=word_tokens+nltk.word_tokenize(user_response)
-                final_words=list(set(word_tokens))
-                print("Sanny: ",end="")
-                print(response(user_response))
-                sent_tokens.remove(user_response)
+                generateResponse(user_response)
     else:
         flag=False
-        print("Sanny: Bye! take care..")
+        print("Sanny: Bye!!! ")
